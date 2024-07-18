@@ -1,11 +1,59 @@
 # Update bump details accordingly. Use bump check to confirm.
 # bump: hugo-version /HUGO_VERSION="(.*)"/ https://github.com/gohugoio/hugo.git|semver:*
-# HUGO_VERSION="V.R.M" # Specify a stable release
-# export ZOPEN_STABLE_TAG="v${HUGO_VERSION}"
-export ZOPEN_STABLE_URL="https://github.com/gohugoio/hugo.git"
+HUGO_VERSION="0.129.0" # Specify a stable release
+export ZOPEN_STABLE_TAG="v${HUGO_VERSION}"
+export ZOPEN_STABLE_URL="https://github.com/gohugoio/hugo.git parse-gotest"
 export ZOPEN_STABLE_DEPS="comp_go wharf"
 export ZOPEN_BUILD_LINE="STABLE"
 export ZOPEN_CATEGORIES="webframework"
+
+export ZOPEN_COMP=GO
+export ZOPEN_CONFIGURE="zopen_config"
+export ZOPEN_CONFIGURE_MINIMAL=1
+export ZOPEN_MAKE="skip"
+export ZOPEN_INSTALL="zopen_install"
+export ZOPEN_CHECK="zopen_check"
+export ZOPEN_CLEAN="zopen_clean"
+
+zopen_init()
+{
+  export CGO_ENABLED=0
+  export GOTMPDIR=$PWD/go-tmpdir
+  mkdir -p $PWD/go-tmpdir
+  export PATH=$PATH:$GOROOT/go-build-zos/bin
+  export GOBIN=$ZOPEN_INSTALL_DIR/bin
+  mkdir -p $ZOPEN_INSTALL_DIR/bin
+  unset CC CXX
+}
+
+zopen_config() {
+  AZURESDK=$(cat go.mod | grep azure-sdk-for-go/sdk/storage/azblob | cut -d ' ' -f 2)
+
+  echo "Cloning & checking out $AZURESDK_TAG"
+  # git clone --depth=1 https://github.com/Azure/azure-sdk-for-go.git
+  # cd azure-sdk-for-go && git -c advice.detachedHead=false checkout "sdk/storage/azblob/$AZURESDK"
+  git clone -c advice.detachedHead=false --depth=1 --branch "sdk/storage/azblob/$AZURESDK" https://github.com/azure/azure-sdk-for-go.git
+  cd azure-sdk-for-go
+  curl -s -o azure-sdk-for-go--$AZURESDK_TAG.patch "https://raw.githubusercontent.com/ZOSOpenTools/wharf/main/deps-patches/azure-sdk-for-go--$AZURESDK_TAG.patch"
+  git apply -v --ignore-space-change --ignore-whitespace azure-sdk-for-go--$AZURESDK_TAG.patch
+
+  cd .. && echo "Cloning go-internal"
+  git clone https://github.com/rogpeppe/go-internal.git
+  git apply -v --ignore-space-change --ignore-whitespace ../patches/go-internal_patch
+
+  cd .. && echo ""
+  go work init ./hugo ./azure-sdk-for-go/sdk/storage/azblob ./go-internal
+  wharf ./hugo/...
+}
+
+zopen_install() {
+  go install 
+}
+
+zopen_check()
+{
+  go test -v -json ./...
+}
 
 zopen_check_results()
 {
@@ -13,9 +61,13 @@ zopen_check_results()
   pfx="$2"
   chk="$1/$2_check.log"
 
+  summary="$(parse-gotest -summary $chk)"
+  total=$(echo "$summary" | grep "total" | cut -d':' -f2)
+  fail=$(echo "$summary" | grep "fail" | cut -d':' -f2)
+
   # Echo the following information to gauge build health
-  echo "actualFailures:0"
-  echo "totalTests:1"
+  echo "actualFailures:$fail"
+  echo "totalTests:$total"
   echo "expectedFailures:0"
   echo "expectedTotalTests:1"
 }
@@ -24,5 +76,5 @@ zopen_get_version()
 {
   # Modify to echo the version of your tool/library
   # Rather than hardcoding the version, obtain the version by running the tool/library
-  echo "1.0.0"
+  echo "$HUGO_VERSION"
 }
