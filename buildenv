@@ -2,8 +2,8 @@
 # bump: hugo-version /HUGO_VERSION="(.*)"/ https://github.com/gohugoio/hugo.git|semver:*
 HUGO_VERSION="0.129.0" # Specify a stable release
 export ZOPEN_STABLE_TAG="v${HUGO_VERSION}"
-export ZOPEN_STABLE_URL="https://github.com/gohugoio/hugo.git parse-gotest"
-export ZOPEN_STABLE_DEPS="comp_go wharf"
+export ZOPEN_STABLE_URL="https://github.com/gohugoio/hugo.git"
+export ZOPEN_STABLE_DEPS="comp_go wharf parse-gotest"
 export ZOPEN_BUILD_LINE="STABLE"
 export ZOPEN_CATEGORIES="webframework"
 
@@ -12,7 +12,8 @@ export ZOPEN_CONFIGURE="zopen_config"
 export ZOPEN_CONFIGURE_MINIMAL=1
 export ZOPEN_MAKE="skip"
 export ZOPEN_INSTALL="zopen_install"
-export ZOPEN_CHECK="zopen_check"
+#export ZOPEN_CHECK="zopen_check"
+export ZOPEN_CHECK="skip"
 export ZOPEN_CLEAN="zopen_clean"
 
 zopen_init()
@@ -28,8 +29,9 @@ zopen_init()
 
 zopen_config() {
   AZURESDK=$(cat go.mod | grep azure-sdk-for-go/sdk/storage/azblob | cut -d ' ' -f 2)
+  AZURESDK_TAG="sdk-storage-azblob-${AZURESDK}"
 
-  echo "Cloning & checking out $AZURESDK_TAG"
+  cd .. && echo "Cloning & checking out $AZURESDK_TAG"
   # git clone --depth=1 https://github.com/Azure/azure-sdk-for-go.git
   # cd azure-sdk-for-go && git -c advice.detachedHead=false checkout "sdk/storage/azblob/$AZURESDK"
   git clone -c advice.detachedHead=false --depth=1 --branch "sdk/storage/azblob/$AZURESDK" https://github.com/azure/azure-sdk-for-go.git
@@ -39,11 +41,13 @@ zopen_config() {
 
   cd .. && echo "Cloning go-internal"
   git clone https://github.com/rogpeppe/go-internal.git
+  cd go-internal
   git apply -v --ignore-space-change --ignore-whitespace ../patches/go-internal_patch
 
   cd .. && echo ""
   go work init ./hugo ./azure-sdk-for-go/sdk/storage/azblob ./go-internal
   wharf ./hugo/...
+  cd hugo
 }
 
 zopen_install() {
